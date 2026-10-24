@@ -32,10 +32,10 @@ jobs:
         }
 
     - name: Restore NuGet Packages
-      run: nuget restore COM3D2.CameraUtility.sln
+      run: nuget restore COM3D2.CameraUtility.csproj
 
     - name: Build Solution
-      run: msbuild COM3D2.CameraUtility.sln /p:Configuration=Release /p:Platform="Any CPU"
+      run: msbuild COM3D2.CameraUtility.csproj /p:Configuration=Release /p:Platform="Any CPU"
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4.6.0

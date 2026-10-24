@@ -9,35 +9,37 @@ jobs:
 
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v4.2.2 # 更新到最新版
+      uses: actions/checkout@v4.2.2
 
     - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2.0.0 # 更新到最新版
+      uses: microsoft/setup-msbuild@v2.0.0
 
     - name: Setup NuGet
-      uses: NuGet/setup-nuget@v2.0.0 # 更新到最新版
-
-    - name: Create Libs Directory
-      run: mkdir libs
+      uses: NuGet/setup-nuget@v2.0.0
 
     - name: Download Unity & BepInEx Dependencies
       shell: powershell
       run: |
+        # 1. 确保 libs 目录存在（如果已存在则直接使用，不报错）
+        if (!(Test-Path "libs")) { New-Item -ItemType Directory -Path "libs" }
+        
+        # 创建临时下载目录
         mkdir temp_deps
         cd temp_deps
         
-        # 1. 下载 BepInEx 依赖
+        # 2. 下载 BepInEx 依赖并复制到 libs 文件夹
         Invoke-WebRequest -Uri "https://github.com" -OutFile "bepinex.zip"
         Expand-Archive -Path "bepinex.zip" -DestinationPath "bepinex_out"
-        Copy-Item "bepinex_out/BepInEx/core/BepInEx.dll" -Destination "../libs/"
-        Copy-Item "bepinex_out/BepInEx/core/0Harmony.dll" -Destination "../libs/"
+        Copy-Item -Force "bepinex_out/BepInEx/core/BepInEx.dll" -Destination "../libs/"
+        Copy-Item -Force "bepinex_out/BepInEx/core/0Harmony.dll" -Destination "../libs/"
         
-        # 2. 下载 UnityEngine 核心依赖
+        # 3. 下载 UnityEngine 核心依赖并复制到 libs 文件夹
         Invoke-WebRequest -Uri "https://github.com" -OutFile "../libs/UnityEngine.dll"
         
-        # 3. 下载互操作存根程序集
+        # 4. 下载互操作存根程序集并复制到 libs 文件夹
         Invoke-WebRequest -Uri "https://github.com" -OutFile "../libs/Assembly-CSharp.dll"
         
+        # 清理临时文件
         cd ..
         Remove-Item -Recurse -Force temp_deps
 
@@ -48,7 +50,7 @@ jobs:
       run: msbuild COM3D2.CameraUtility.sln /p:Configuration=Release /p:Platform="Any CPU"
 
     - name: Upload Artifact
-      uses: actions/upload-artifact@v4.6.0 # 更新到最新版
+      uses: actions/upload-artifact@v4.6.0
       with:
         name: COM3D2.CameraUtility2-DLL
         path: |

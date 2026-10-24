@@ -1,45 +1,76 @@
-name: Build Plugin DLL
+name: Build CameraUtility2
 
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2022
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        shell: pwsh
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4.2.2
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2.0.0
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v3
 
-    - name: Setup NuGet
-      uses: NuGet/setup-nuget@v2.0.0
+      - name: Set up NuGet
+        uses: NuGet/setup-nuget@v2
 
-    - name: Download & Stub Game Dependencies
-      shell: powershell
-      run: |
-        # 1. 确保 libs 目录存在
-        if (!(Test-Path "libs")) { New-Item -ItemType Directory -Path "libs" }
-        
-        # 2. 从可靠公共渠道下载 Assembly-CSharp 基础存根
-        Invoke-WebRequest -Uri "https://github.com" -OutFile "libs/Assembly-CSharp.dll"
-        
-        # 3. 如果作者的 libs 里缺少基础 UnityEngine，则从可靠源补签
-        if (!(Test-Path "libs/UnityEngine.dll")) {
-            Invoke-WebRequest -Uri "https://github.com" -OutFile "libs/UnityEngine.dll"
-        }
+      - name: Restore project dependencies
+        run: >-
+          nuget restore COM3D2.CameraUtility2.sln
+          -PackagesDirectory packages
+          -Source "https://api.nuget.org/v3/index.json;https://nuget.bepinex.dev/v3/index.json"
+          -NonInteractive
 
-    - name: Restore NuGet Packages
-      run: nuget restore COM3D2.CameraUtility.csproj
+      - name: Download .NET Framework 3.5 reference assemblies
+        run: >-
+          nuget install Microsoft.NETFramework.ReferenceAssemblies.net35
+          -Version 1.0.3
+          -OutputDirectory packages
+          -Source "https://api.nuget.org/v3/index.json"
+          -NonInteractive
 
-    - name: Build Solution
-      run: msbuild COM3D2.CameraUtility.csproj /p:Configuration=Release /p:Platform="Any CPU"
+      - name: Configure reference assemblies for this build
+        run: |
+          $projectPath = (Resolve-Path "COM3D2.CameraUtility2.csproj").Path
+          $targetsPath = (Resolve-Path "packages/Microsoft.NETFramework.ReferenceAssemblies.net35.1.0.3/build/Microsoft.NETFramework.ReferenceAssemblies.net35.targets").Path
 
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4.6.0
-      with:
-        name: COM3D2.CameraUtility2-DLL
-        path: |
-          **/bin/Release/COM3D2.CameraUtility*.dll
+          [xml]$project = Get-Content -LiteralPath $projectPath -Raw
+          $import = $project.CreateElement(
+            "Import",
+            $project.DocumentElement.NamespaceURI
+          )
+          $import.SetAttribute("Project", $targetsPath)
+          [void]$project.DocumentElement.AppendChild($import)
+          $project.Save($projectPath)
+
+      - name: Build Release DLL
+        run: >-
+          msbuild COM3D2.CameraUtility2.csproj
+          /t:Rebuild
+          /m
+          /p:Configuration=Release
+          /p:Platform=AnyCPU
+          /p:PostBuildEvent=
+          /verbosity:minimal
+          /nologo
+
+      - name: Upload plugin DLL
+        uses: actions/upload-artifact@v7
+        with:
+          name: CameraUtility2-Release
+          path: bin/Release/COM3D2.CameraUtility2.Plugin.dll
+          if-no-files-found: error
+          retention-days: 14

@@ -17,31 +17,19 @@ jobs:
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v2.0.0
 
-    - name: Download Unity & BepInEx Dependencies
+    - name: Download & Stub Game Dependencies
       shell: powershell
       run: |
-        # 1. 确保 libs 目录存在（如果已存在则直接使用，不报错）
+        # 1. 确保 libs 目录存在
         if (!(Test-Path "libs")) { New-Item -ItemType Directory -Path "libs" }
         
-        # 创建临时下载目录
-        mkdir temp_deps
-        cd temp_deps
+        # 2. 从可靠公共渠道下载 Assembly-CSharp 基础存根
+        Invoke-WebRequest -Uri "https://github.com" -OutFile "libs/Assembly-CSharp.dll"
         
-        # 2. 下载 BepInEx 依赖并复制到 libs 文件夹
-        Invoke-WebRequest -Uri "https://github.com" -OutFile "bepinex.zip"
-        Expand-Archive -Path "bepinex.zip" -DestinationPath "bepinex_out"
-        Copy-Item -Force "bepinex_out/BepInEx/core/BepInEx.dll" -Destination "../libs/"
-        Copy-Item -Force "bepinex_out/BepInEx/core/0Harmony.dll" -Destination "../libs/"
-        
-        # 3. 下载 UnityEngine 核心依赖并复制到 libs 文件夹
-        Invoke-WebRequest -Uri "https://github.com" -OutFile "../libs/UnityEngine.dll"
-        
-        # 4. 下载互操作存根程序集并复制到 libs 文件夹
-        Invoke-WebRequest -Uri "https://github.com" -OutFile "../libs/Assembly-CSharp.dll"
-        
-        # 清理临时文件
-        cd ..
-        Remove-Item -Recurse -Force temp_deps
+        # 3. 如果作者的 libs 里缺少基础 UnityEngine，则从可靠源补签
+        if (!(Test-Path "libs/UnityEngine.dll")) {
+            Invoke-WebRequest -Uri "https://github.com" -OutFile "libs/UnityEngine.dll"
+        }
 
     - name: Restore NuGet Packages
       run: nuget restore COM3D2.CameraUtility.sln

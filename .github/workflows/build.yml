@@ -1,0 +1,57 @@
+name: Build Plugin DLL
+
+on:
+  workflow_dispatch: # 允许你手动点击按钮触发编译
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v1
+
+    - name: Create Libs Directory
+      run: mkdir libs
+
+    - name: Download Unity & BepInEx Dependencies
+      shell: powershell
+      run: |
+        # 创建临时目录
+        mkdir temp_deps
+        cd temp_deps
+        
+        # 1. 自动拉取标准的 BepInEx 5.4 依赖
+        Invoke-WebRequest -Uri "https://github.com" -OutFile "bepinex.zip"
+        Expand-Archive -Path "bepinex.zip" -DestinationPath "bepinex_out"
+        Copy-Item "bepinex_out/BepInEx/core/BepInEx.dll" -Destination "../libs/"
+        Copy-Item "bepinex_out/BepInEx/core/0Harmony.dll" -Destination "../libs/"
+        
+        # 2. 自动拉取通用 Unity 2018.x 核心依赖（COM3D2所使用的基本框架）
+        Invoke-WebRequest -Uri "https://github.com" -OutFile "../libs/UnityEngine.dll"
+        
+        # 3. 自动拉取标准的 Assembly-CSharp 条目补签
+        # 注意：此处使用公共的公开 BepInEx 互操作存根占位，可绕过游戏未公开代码编译
+        Invoke-WebRequest -Uri "https://github.com" -OutFile "../libs/Assembly-CSharp.dll"
+        
+        cd ..
+        Remove-Item -Recurse -Force temp_deps
+
+    - name: Restore NuGet Packages
+      run: nuget restore COM3D2.CameraUtility.sln
+
+    - name: Build Solution
+      run: msbuild COM3D2.CameraUtility.sln /p:Configuration=Release /p:Platform="Any CPU"
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: COM3D2.CameraUtility2-DLL
+        path: |
+          **/bin/Release/COM3D2.CameraUtility*.dll
